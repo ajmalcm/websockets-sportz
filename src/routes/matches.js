@@ -13,7 +13,7 @@ router.get("/",async (req,res)=>{
     const MAX_LIMIT=100;
     
     if (!parsed.success) {
-        return res.status(400).json({ error: "Invalid Query Parameters", details: JSON.stringify(parsed.error) });
+        return res.status(400).json({ error: "Invalid Query Parameters", details: parsed.error.issues });
     }
 
     const limit= Math.min(parsed.data.limit ?? 50,MAX_LIMIT);
@@ -32,7 +32,7 @@ router.post("/",async (req,res)=>{
     const parsed = createMatchSchema.safeParse(req.body);
 
     if (!parsed.success) {
-        return res.status(400).json({ error: "Invalid Payload", details: JSON.stringify(parsed.error) });
+        return res.status(400).json({ error: "Invalid Payload", details: parsed.error.issues });
     }
 
     // destructure after validation to avoid accessing parsed.data when invalid

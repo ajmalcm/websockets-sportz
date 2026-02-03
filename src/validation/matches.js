@@ -18,10 +18,7 @@ export const matchIdParamSchema = z.object({
 });
 
 // Helper to validate ISO date strings (uses Date.parse; rejects NaN)
-const isoDateString = z.string().refine((s) => {
-  const t = Date.parse(s);
-  return !Number.isNaN(t);
-}, { message: 'Invalid ISO date string' });
+const isoDateString = z.iso.datetime();
 
 // createMatchSchema: sport, homeTeam, awayTeam as non-empty strings
 // startTime and endTime as strings validated as ISO dates, with superRefine to ensure chronological order
