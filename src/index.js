@@ -2,6 +2,7 @@ import express from "express";
 import http from "http";
 import matchesRouter from "./routes/matches.js";
 import { attachWebSocketServer } from "./ws/server.js";
+import { securityMiddleware } from "./arcjet.js";
 
 const app=express();
 const server=http.createServer(app);
@@ -15,6 +16,8 @@ app.get("/",(req,res)=>{
     res.json({msg:"helloo init api"}).status(200)
 })
 
+
+app.use(securityMiddleware());
 app.use("/matches", matchesRouter);
 
 const {broadcastMatchCreated}=attachWebSocketServer(server);
