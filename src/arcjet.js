@@ -1,7 +1,7 @@
 import arcjet, { detectBot, shield, slidingWindow } from "@arcjet/node";
 
-const arcjetKey=process.env.ARKJET_JEY;
-const arcjetMode=process.env.ARKJET_MODE==='DRY_RUN'?'DRY_RUN':'LIVE'
+const arcjetKey=process.env.ARCJET_KEY;
+const arcjetMode=process.env.ARCJET_MODE==='DRY_RUN'?'DRY_RUN':'LIVE'
 
 if(!arcjetKey) throw new Error("Arcjet environment variable is missing.");
 
@@ -39,10 +39,14 @@ export function securityMiddleware()
             if(decision.isDenied())
             {
                 if(decision.reason.isRateLimit())
+                {
                     return res.status(429).json({error:"Too many requests!."})
+
+                }
+                return res.status(403).json({error:"Forbidden."})
             }
 
-            return res.status(403).json({error:"Forbidden."})
+            return next();
 
         }
         catch(error)
@@ -51,7 +55,6 @@ export function securityMiddleware()
             return res.status(503).json({error:"Service Unavailable."})
         }
 
-        next();
 
     }
 }

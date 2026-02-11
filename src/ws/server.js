@@ -1,5 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws";
-import { wsArcjet } from "../arcjet";
+import { wsArcjet } from "../arcjet.js";
 
 function sendJson(socket,payload)
 {
@@ -22,37 +22,55 @@ export function attachWebSocketServer(server)
 {
     const wss=new WebSocketServer({server,path:"/ws",maxPayload:1024*1024});
 
-    wss.on("connection",async (socket,req)=>{
+    // Move Arcjet protection to the HTTP 'upgrade' handler so upgrades can be denied early
+    server.on('upgrade', async (req, socket, head) => {
+        // Only handle the configured websocket path here
+        if (req.url !== '/ws') return;
 
-        if(wsArcjet)
-        {
-            try{
-                const decision=await wsArcjet.protect(req);
+        if (wsArcjet) {
+            try {
+                const decision = await wsArcjet.protect(req);
 
-                if(decision.isDenied())
-                {
-                    const code=decision.reason.isRateLimit()?1013:1008;
-                    const reason=decision.reason.isRateLimit()?"Rate limit exceeded":'Access denied';
+                if (decision.isDenied()) {
+                    // Map Arcjet reasons to HTTP status and close behavior
+                    const isRateLimit = decision.reason && typeof decision.reason.isRateLimit === 'function' && decision.reason.isRateLimit();
+                    const statusLine = isRateLimit ? 'HTTP/1.1 429 Too Many Requests' : 'HTTP/1.1 403 Forbidden';
+                    const reason = isRateLimit ? 'Rate limit exceeded' : 'Access denied';
 
-                    socket.close(code,reason);
+                    try {
+                        socket.write(`${statusLine}\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(reason)}\r\n\r\n${reason}`);
+                    } catch (err) {
+                        // ignore socket write errors
+                    }
+                    socket.destroy();
                     return;
                 }
-
-            }
-            catch(error)
-            {
-                console.error("WS connection error",error)
-                socket.close(1011,'Server security error.');
+            } catch (error) {
+                console.error('WS upgrade protection error', error);
+                const reason = 'Server security error.';
+                try {
+                    socket.write(`HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(reason)}\r\n\r\n${reason}`);
+                } catch (err) {
+                    // ignore
+                }
+                socket.destroy();
                 return;
             }
         }
 
-        socket.isAlive=true;
-        socket.on("pong",()=>{socket.isAlive=true})
-       sendJson(socket,{type:"welcome"});
+        // If protection passed (or not configured), proceed with WebSocket handshake
+        wss.handleUpgrade(req, socket, head, (ws) => {
+            wss.emit('connection', ws, req);
+        });
+    });
 
-       socket.on("error",console.error)
-    })
+    wss.on('connection', (socket, req) => {
+        // At this point Arcjet protection has already run during upgrade
+        socket.isAlive = true;
+        socket.on('pong', () => { socket.isAlive = true; });
+        sendJson(socket, { type: 'welcome' });
+        socket.on('error', console.error);
+    });
 
     const interval=setInterval(()=>{
         wss.clients.forEach((ws)=>{
